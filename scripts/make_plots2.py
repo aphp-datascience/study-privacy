@@ -5,6 +5,7 @@ from privacy.indicators.cluster import Cluster
 from privacy.pipelines.table1 import variations_conf_table_1
 from privacy.pipelines.plots import figureAge
 from typing import List
+from privacy.misc.constants import variations_conf_seasonal_epidemics
 from confit import Cli
 
 
@@ -51,7 +52,8 @@ def main(
             
             else:      
                 results = []
-                for variation in variations_conf_table_1:
+                variations = variations_conf_seasonal_epidemics if conf_name=="config_seasonal_epidemics" else variations_conf_table_1
+                for variation in variations:
                     # Set conf dictionary
                     conf_general = {"seed": seed, "cohort_name":cohort_name}
                     conf_general.update(variation.copy())

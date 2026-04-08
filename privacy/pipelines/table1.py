@@ -1,3 +1,15 @@
+import sys
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
+from loguru import logger
+
+from privacy.attacks.access import p_access
+from privacy.misc.utils import DataModule
+from privacy.pipelines.reliability import pipe_reliability
+from privacy.pipelines.uniqueness import pipe_uniqueness
+from privacy.misc.constants import variations_conf_seasonal_epidemics
+
 variations_conf_table_1 = (
     {
         "pseudonymization_algorithm": "NoPseudonymizer",
@@ -57,16 +69,10 @@ variations_conf_table_1 = (
     },
 )
 
-import sys
-from typing import Any, Dict, List, Optional
-
-import pandas as pd
-from loguru import logger
-
-from privacy.attacks.access import p_access
-from privacy.misc.utils import DataModule
-from privacy.pipelines.reliability import pipe_reliability
-from privacy.pipelines.uniqueness import pipe_uniqueness
+all_variations = list(variations_conf_table_1)
+for item in variations_conf_seasonal_epidemics:
+    if item not in all_variations:
+        all_variations.append(item)
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
@@ -85,11 +91,18 @@ def get_table_1(
     ],
     seed: int = 55,
     output_path: Optional[str] = None,
+    specific_patients_to_check: Optional[List[str]] = None,
+    scenario: str = "random_target",
+    conf_name: str = "config_base"
 ):
+    logger.info("Starting Table 1 computation")
+    logger.info(f"Scenario: {scenario}")
+    logger.info(f"Configuration: {conf_name}")
+    
     conf_general_table_1 = dict(
         attack_knowledge=attack_knowledge,
-        overall_cohort=data.cohort("all_population"),
-        overall_stays=data.stays("all_population"),
+        overall_cohort=None,
+        overall_stays=None,
         cohort_to_check=None,
         stays_to_check=None,
         patients_to_check=None,
@@ -98,9 +111,15 @@ def get_table_1(
     results_table_1 = []
     for cohort_name in cohorts_definitions.keys():
         logger.info(f"Cohort: {cohort_name}")
+        logger.info(f"Attack scenario: {scenario}")
+        logger.info(f"Attacker knowledge: {attack_knowledge}")
+
         stays_to_check = data.stays(cohort_name)
         cohort_to_check = data.cohort(cohort_name)
-        patients_to_check = data.patients_to_check(cohort_name, random_state=seed)
+        if specific_patients_to_check is None:
+            patients_to_check = data.patients_to_check(cohort_name, random_state=seed)
+        else:
+            patients_to_check = specific_patients_to_check
         indicators = cohorts_definitions[cohort_name]["indicators"]
 
         conf_general_table_1.update(
@@ -110,20 +129,38 @@ def get_table_1(
                 patients_to_check=patients_to_check,
             )
         )
+        if scenario == "target_in_cohort":
+            conf_general_table_1.update(
+                dict(
+                    overall_cohort=cohort_to_check,
+                    overall_stays=stays_to_check,
+                )
+            )
+        elif scenario == "random_target":
+            conf_general_table_1.update(
+                dict(
+                    overall_cohort=data.cohort("all_population"),
+                    overall_stays=data.stays("all_population"),
+                )
+            )
 
-        for variation in variations_conf_table_1:
+        for variation in all_variations:
+            logger.info(f"Pseudonymisation algorithm: {variation.get('pseudonymization_algorithm')} - shift: {variation.get('high_general')}")
             conf_general_table_1.update(variation)
 
-            uniqueness = pipe_uniqueness(**conf_general_table_1)
+            uniqueness, remainder = pipe_uniqueness(**conf_general_table_1)
 
             reliability_indicator = pipe_reliability(
                 indicators=indicators, **conf_general_table_1
             )
 
-            access = p_access(
-                cohort=cohort_to_check,
-                n_total=data.all_population_cohort.person_id.nunique(),
-            )
+            if scenario == "target_in_cohort":
+                access = 1.0
+            else:
+                access = p_access(
+                    cohort=cohort_to_check,
+                    n_total=data.all_population_cohort.person_id.nunique(),
+                )
             success_rate = access * uniqueness
             n_cohort = cohort_to_check["person_id"].nunique()
             variation.update(
@@ -134,6 +171,7 @@ def get_table_1(
                     "access": access,
                     "success_rate": success_rate,
                     "n_cohort": n_cohort,
+                    "remainder": remainder,
                 }
             )
 

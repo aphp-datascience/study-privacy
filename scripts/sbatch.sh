@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=table_knowledge_uniqueness
+#SBATCH --job-name=privacy_uniqueness
 #SBATCH -t 24:00:00
 #SBATCH -N1-1
 #SBATCH	--cpus-per-task=16
@@ -12,6 +12,4 @@
 
 ## your code here
 source $HOME/privacy/.venv3/bin/activate 
-
-
-python $HOME/privacy/scripts/table_knowledge_uniqueness.py --config $HOME/privacy/configs/config_base.cfg 
+sleep infinity

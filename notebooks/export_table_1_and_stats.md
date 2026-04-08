@@ -32,90 +32,139 @@ from privacy.misc.constants import cohort_name_mapping
 ```
 
 ```python
-df = pd.read_csv("../data/config_base/table1.csv")
+def read_table1(config, scenario, values=["reliability_indicator", "uniqueness"]):
+    df = pd.read_csv(f"../data/{config}/{scenario}.csv")
+    # df = pd.read_csv("../data/config_base/table1_random_target.csv")
+
+    # df["pseudonymization_algorithm_parameter"] = df.pseudonymization_algorithm.str.cat(
+    #     df.high_general.astype(str), sep=" - "
+    # )
+
+    df = df.query("cohort_name!='random'").copy()
+
+    df.pseudonymization_algorithm = pd.Categorical(
+        df.pseudonymization_algorithm,
+        categories=[
+            "NoPseudonymizer",
+            "BasePseudonymizer",
+            "BirthPseudonymizer",
+            "StayPseudonymizer",
+        ],
+        ordered=True,
+    )
+
+    print("Cohort names", df.cohort_name.unique())
+
+    print("N cohort max", df.n_cohort.max())
+
+    print("N cohort min", df.n_cohort.min())
+
+    print("## Mapping ##")
+    print(cohort_name_mapping)
+
+    df.cohort_name.replace(cohort_name_mapping, inplace=True)
+
+    df.cohort_name = pd.Categorical(
+        df.cohort_name,
+        categories=[
+            "Overall",
+            "Seasonal bronchiolitis",
+            "Seasonal flu",
+            "Bariatric surgery readmission",
+            "Pancreatic Cancer",
+            "Cancer",
+        ],
+        ordered=True,
+    )
+
+    table = df.pivot(
+        index=["pseudonymization_algorithm", "high_general"],
+        columns="cohort_name",
+        values=values,  # "success_rate" , "uniqueness"
+    )
+
+    table = table.swaplevel(
+        axis=1,
+    )
+
+    table.sort_index(axis=1, inplace=True)
+
+    table.sort_index(axis=0, inplace=True)
+
+    table.sort_index(inplace=True)
+
+    return table, df
 ```
 
 ```python
-# df["pseudonymization_algorithm_parameter"] = df.pseudonymization_algorithm.str.cat(
-#     df.high_general.astype(str), sep=" - "
-# )
+config = "config_seasonal_epidemics"
+scenario = "table1_target_in_cohort"
+
+table_se, df_se = read_table1(config=config, scenario=scenario)
 ```
 
 ```python
-df = df.query("cohort_name!='random'").copy()
+df_se = df_se.query("high_general.isin([7,30]) & cohort_name!='Overall'")
 ```
 
 ```python
-df.pseudonymization_algorithm = pd.Categorical(
-    df.pseudonymization_algorithm,
-    categories=[
-        "NoPseudonymizer",
-        "BasePseudonymizer",
-        "BirthPseudonymizer",
-        "StayPseudonymizer",
+table_se = table_se.loc[
+    [
+        ("BasePseudonymizer", 7),
+        ("BasePseudonymizer", 30),
+        ("BirthPseudonymizer", 7),
+        ("BirthPseudonymizer", 30),
+        ("StayPseudonymizer", 7),
+        ("StayPseudonymizer", 30),
     ],
-    ordered=True,
-)
-```
-
-```python
-df.cohort_name.unique()
-```
-
-```python
-df.n_cohort.max()
-```
-
-```python
-df.n_cohort.min()
-```
-
-```python
-cohort_name_mapping
-```
-
-```python
-df.cohort_name.replace(cohort_name_mapping, inplace=True)
-```
-
-```python
-df.cohort_name = pd.Categorical(
-    df.cohort_name,
-    categories=[
-        "Overall",
-        "Seasonal bronchiolitis",
-        "Seasonal flu",
-        "Bariatric surgery readmission",
-        "Pancreatic Cancer",
-        "Cancer",
+    [
+        ("Seasonal bronchiolitis", "reliability_indicator"),
+        ("Seasonal bronchiolitis", "uniqueness"),
+        ("Seasonal flu", "reliability_indicator"),
+        ("Seasonal flu", "uniqueness"),
     ],
-    ordered=True,
-)
+]
+table_se
+```
+
+```python
+config = "config_base"
+scenario = "table1_random_target"
+
+table_base, df_base = read_table1(config=config, scenario=scenario)
+```
+
+```python
+df_base.query("pseudonymization_algorithm == 'NoPseudonymizer'")
+```
+
+```python
+table_base
+```
+
+```python
+df = pd.concat(
+    [
+        df_base,
+    ]
+)  # df_se
 ```
 
 ```python
 table = df.pivot(
     index=["pseudonymization_algorithm", "high_general"],
     columns="cohort_name",
-    values=["reliability_indicator", "success_rate"],
+    values=["reliability_indicator", "uniqueness"],  # "success_rate" , "uniqueness"
 )
-```
 
-```python
 table = table.swaplevel(
     axis=1,
 )
-```
 
-```python
 table.sort_index(axis=1, inplace=True)
-```
 
-```python
 table.sort_index(axis=0, inplace=True)
-```
 
-```python
 table.sort_index(inplace=True)
 ```
 
@@ -130,77 +179,33 @@ print(table.to_csv())
 # Stats variables
 
 ```python
-df.success_rate.quantile(q=0.25) * 100
+df.success_rate.describe()
 ```
 
 ```python
-df.success_rate.median() * 100
+df.query("cohort_name=='Overall'").success_rate.describe()
 ```
 
 ```python
-df.success_rate.quantile(q=0.75) * 100
+df.query("cohort_name!='Overall'").success_rate.describe()
 ```
 
 ```python
-df.query("cohort_name=='Overall'").success_rate.quantile(q=0.75)
+df.success_rate.describe()
 ```
 
 ```python
-df.query("cohort_name=='Overall'").success_rate.median()
+df.uniqueness.describe()
 ```
 
 ```python
-df.query("cohort_name=='Overall'").success_rate.quantile(q=0.25)
-```
-
-```python
-df.query("cohort_name!='Overall'").success_rate.median()
-```
-
-```python
-df.query("cohort_name!='Overall'").success_rate.quantile(q=0.75)
-```
-
-```python
-df.query("cohort_name!='Overall'").success_rate.quantile(q=0.25)
-```
-
-```python
-df.success_rate.min()
-```
-
-```python
-df.success_rate.max()
-```
-
-```python
-df.uniqueness.median()
-```
-
-```python
-df.uniqueness.quantile(q=0.75)
-```
-
-```python
-df.uniqueness.min()
-```
-
-```python
-df.uniqueness.max()
-```
-
-```python
-df.uniqueness.quantile(q=0.25)
-```
-
-```python
-df.reliability_indicator.max()
+df.reliability_indicator.describe()
 ```
 
 ```python
 df.query(
     " pseudonymization_algorithm != 'NoPseudonymizer' & cohort_name !=  'Overall'"
-).success_rate.min()
+).success_rate.describe()
 ```
 
 ```python

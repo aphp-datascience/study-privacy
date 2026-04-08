@@ -8,7 +8,7 @@ from privacy.misc.data_wrangling import spark_filter_col_with_regex
 from privacy.misc.utils import get_spark
 from privacy.registry import registry
 
-spark, sql = get_spark()
+
 
 
 @registry.cohort_generator("ICD10")
@@ -38,7 +38,7 @@ class ICD10(BaseCohortGenerator):
 
     def filter_stays_by_icd_10_diagnosis(self, vo: sparkDataFrame) -> sparkDataFrame:
         # Filter by icd10 diagnosis
-        co = sql("SELECT *  FROM condition_occurrence")
+        co = self.sql("SELECT *  FROM condition_occurrence")
         co = co.select(
             [
                 "visit_occurrence_id",
@@ -49,7 +49,7 @@ class ICD10(BaseCohortGenerator):
             ]
         )
 
-        co_collected = spark.createDataFrame([], schema=co.schema)
+        co_collected = self.spark.createDataFrame([], schema=co.schema)
         if self.icd10_diagnosis is not None:
             co_exact = co.filter(
                 F.col("condition_source_value").isin(self.icd10_diagnosis)
@@ -81,8 +81,9 @@ class ICD10(BaseCohortGenerator):
     def __call__(
         self,
     ) -> Tuple[sparkDataFrame, sparkDataFrame]:
+        self.spark, self.sql = get_spark()
         # Set DB
-        sql(f"use {self.db}")
+        self.sql(f"use {self.db}")
 
         # Get stays
         vo = self.retrieve_stays()
@@ -101,5 +102,7 @@ class ICD10(BaseCohortGenerator):
 
         # Add hospitals
         vo = self.add_hospital_info_to_stays(vo)
+        del self.sql
+        del self.spark
 
         return vo, cohort

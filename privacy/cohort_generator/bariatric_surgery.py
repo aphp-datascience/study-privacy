@@ -8,7 +8,7 @@ from privacy.cohort_generator.icd10 import ICD10
 from privacy.misc.utils import get_spark
 from privacy.registry import registry
 
-spark, sql = get_spark()
+
 
 
 @registry.cohort_generator("BariatricSurgery")
@@ -53,7 +53,7 @@ class BariatricSurgery(ICD10):
         return vo
 
     def filter_by_procedure_codes(self, vo: sparkDataFrame) -> sparkDataFrame:
-        po = sql("SELECT * FROM procedure_occurrence")
+        po = self.sql("SELECT * FROM procedure_occurrence")
         po = po.select(
             [
                 "visit_occurrence_id",
@@ -75,8 +75,9 @@ class BariatricSurgery(ICD10):
     def __call__(
         self,
     ) -> Tuple[sparkDataFrame, sparkDataFrame]:
+        _ , self.sql = get_spark()
         # Set DB
-        sql(f"use {self.db}")
+        self.sql(f"use {self.db}")
 
         # Get stays
         vo = self.retrieve_stays()
@@ -117,5 +118,7 @@ class BariatricSurgery(ICD10):
 
         # Add hospitals
         vo_all = self.add_hospital_info_to_stays(vo_all)
+
+        del self.sql
 
         return vo_all, cohort

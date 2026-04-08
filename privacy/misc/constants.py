@@ -192,3 +192,62 @@ pseudonimizer_name_mapping = {
     "BirthPseudonymizer": "Birth pseudonymisation",
     "StayPseudonymizer": "Hospital stay pseudonymisation",
 }
+
+variations_conf_seasonal_epidemics = (
+    {
+        "pseudonymization_algorithm": "NoPseudonymizer",
+        "low_general": 0,
+        "high_general": 0,
+    },
+    {
+        "pseudonymization_algorithm": "BasePseudonymizer",
+        "low_general": -7,
+        "high_general": 7,
+    },    
+    {
+        "pseudonymization_algorithm": "BasePseudonymizer",
+        "low_general": -30,
+        "high_general": 30,
+    },
+    {
+        "pseudonymization_algorithm": "BasePseudonymizer",
+        "low_general": -100,
+        "high_general": 100,
+    },
+        {
+        "pseudonymization_algorithm": "BirthPseudonymizer",
+        "low_general": -7,
+        "high_general": 7,
+        "low_birth_date": -7,
+        "high_birth_date": 7,
+    },    
+    {
+        "pseudonymization_algorithm": "BirthPseudonymizer",
+        "low_general": -30,
+        "high_general": 30,
+        "low_birth_date": -30,
+        "high_birth_date": 30,
+    },
+    {
+        "pseudonymization_algorithm": "BirthPseudonymizer",
+        "low_general": -100,
+        "high_general": 100,
+        "low_birth_date": -100,
+        "high_birth_date": 100,
+    },
+    {
+        "pseudonymization_algorithm": "StayPseudonymizer",
+        "low_general": -7,
+        "high_general": 7,
+    },    
+    {
+        "pseudonymization_algorithm": "StayPseudonymizer",
+        "low_general": -30,
+        "high_general": 30,
+    },
+    {
+        "pseudonymization_algorithm": "StayPseudonymizer",
+        "low_general": -100,
+        "high_general": 100,
+    }
+)

@@ -8,7 +8,13 @@ from loguru import logger
 
 from privacy.misc.assignement import Assignement
 from privacy.misc.data_wrangling import pandas_to_polars_timedelta
+import os, psutil
 
+
+def memory_usage(tag=""):
+    process = psutil.Process(os.getpid())
+    mem = process.memory_info().rss / 1024**2 / 1000  # in GB
+    return f"[{tag}] Memory usage: {mem:.2f} GB"
 
 class Uniqueness:
     def __init__(
@@ -81,6 +87,9 @@ class Uniqueness:
         )
         hospital_sequence_knowledge = "hospital" in attack_knowledge
 
+        # Knowledge about the number of stays
+        n_stay_knowledge = not cols_visit_date.isdisjoint(attack_knowledge)
+
         assert set(["gender", "death_date"]).issubset(attack_knowledge)
 
         dataset = dataset.sort(
@@ -142,7 +151,12 @@ class Uniqueness:
                     + pl.col("death")
                 ).alias("hash"),
             )
+        elif n_stay_knowledge:
+            sequences = sequences.with_columns(
+                (pl.col("gender") + "_" + pl.col("sequence_length").cast("str") + "_" + pl.col("death")).alias("hash"),
+            )
         else:
+            # The attacker always knows the gender and vital status (hypothesis of the article)
             sequences = sequences.with_columns(
                 (pl.col("gender") + "_" + pl.col("death")).alias("hash"),
             )
@@ -169,6 +183,7 @@ class Uniqueness:
         hash_correspondance = sequences.select("hash").unique()
         hash_correspondance = hash_correspondance.with_row_count(name="hash_int")
         sequences = sequences.join(hash_correspondance, on="hash", how="inner")
+        # sequences = sequences.rename({"hash": "hash_str"}) # FIXME remove this later, it's just to debug
         sequences = sequences.drop(columns=["hash"])
         sequences = sequences.rename({"hash_int": "hash"})
         return sequences
@@ -253,26 +268,30 @@ class Uniqueness:
         # >> on peut pas utiliser visit_number ? (logique)
         # >> on peut garder qu'une visite par patient (memoire)
         # Si on connait pas les infos des dates, on connait que les infos niveau patient !
-        if (self.pseudonymization_process["algorithm"] != "StayPseudonymizer") and (
-            hospital_sequence_knowledge
-        ):
+        # if (self.pseudonymization_process["algorithm"] != "StayPseudonymizer") and (
+        #     hospital_sequence_knowledge
+        # ):
+        #     logger.debug("Merge by hash + visit_number")
+        #     left_on = ["hash", "visit_number"]
+        #     right_on = ["hash", "visit_number_shifted_candidate"]
+
+        # elif not hospital_sequence_knowledge:
+        #     logger.debug("Merge only by hash and drop rows (keep one stay per patient)")
+        #     left_on = [
+        #         "hash",
+        #     ]
+        #     right_on = [
+        #         "hash",
+        #     ]
+
+        #     stays = stays.unique(subset=["person_id"])
+        #     stays_patients_to_check = stays_patients_to_check.unique(
+        #         subset=["person_id"]
+        #     )
+        if (self.pseudonymization_process["algorithm"] != "StayPseudonymizer"):
             logger.debug("Merge by hash + visit_number")
             left_on = ["hash", "visit_number"]
             right_on = ["hash", "visit_number_shifted_candidate"]
-
-        elif not hospital_sequence_knowledge:
-            logger.debug("Merge only by hash and drop rows (keep one stay per patient)")
-            left_on = [
-                "hash",
-            ]
-            right_on = [
-                "hash",
-            ]
-
-            stays = stays.unique(subset=["person_id"])
-            stays_patients_to_check = stays_patients_to_check.unique(
-                subset=["person_id"]
-            )
 
         else:
             logger.debug("Merge only by hash")
@@ -294,6 +313,7 @@ class Uniqueness:
                 "duration",
                 "visit_number_shifted",
                 "care_site_id",
+                # "hash_str", # FIXME remove this later, it's just to debug
             ]
         )
 
@@ -652,9 +672,11 @@ class Uniqueness:
             self.pseudonymization_process["shifts"]["birth"]["high"]
             - self.pseudonymization_process["shifts"]["general"]["high"]
         )
-
+        logger.debug(f"Checking temporal consistency for {algorithm}")
+        logger.debug(f"Visit date knowledge: {visit_date_cols_knowledge}")
+        logger.debug(f"Vital status knowledge: {vital_status_cols_knowledge}")
         if visit_date_cols_knowledge:
-            if algorithm == "BasePseudonymizer":
+            if algorithm == "BasePseudonymizer":  
                 # Algo 1
                 condition_algo_base = (pl.col("distinct").is_not()).and_(
                     pl.col("n_visit_start_date_shifts") == 1,
@@ -750,7 +772,8 @@ class Uniqueness:
                                     "visit_number_shifted_candidate"
                                 ],
                                 n_stays_patient=x["n_stays_patient"],
-                            ).is_compatible()
+                            ).is_compatible(),
+                            return_dtype=pl.Boolean
                         )
                     )
                     .otherwise(pl.col("temporal_inconsistency"))
@@ -824,7 +847,7 @@ class Uniqueness:
 
         result = result.drop(
             [
-                "remainder",
+                # "remainder",
                 "total_candidates",
                 "candidates_w_temporal_inconsistency",
             ]
@@ -860,6 +883,7 @@ class Uniqueness:
                 "death_date",
                 "duration",
                 "hash",
+                # "hash_str", # FIXME remove this later, it's just to debug
                 "sequence_length",
             ]
         )
@@ -1002,6 +1026,8 @@ class Uniqueness:
             chunk = patients_to_check[i : i + batch_size]
 
             logger.debug(f"chunk size : {len(chunk)}")
+            logger.info(f"--- ### i: {i} - {i/len(patients_to_check)*100:.2f}% complete ### ---")
+            logger.info(memory_usage(f"i: {i}"))
 
             (
                 result_chunk,
@@ -1014,16 +1040,17 @@ class Uniqueness:
             if return_stays:
                 patient_candidates_list.append(patient_candidates_chunk)
                 stays_patient_candidates_list.append(stays_patient_candidates_chunk)
-
-        # concatenate all batchs
-        result = pl.concat(result_list, rechunk=True, parallel=False)
-
+        
+        logger.info(memory_usage("Before concat"))
+        # concatenate all batches
+        result = pl.concat(result_list, rechunk=False, parallel=False)
+        logger.info(memory_usage("After concat"))
         if return_stays:
             patient_candidates = pl.concat(
-                patient_candidates_list, rechunk=True, parallel=False
+                patient_candidates_list, rechunk=False, parallel=False
             )
             stays_patient_candidates = pl.concat(
-                stays_patient_candidates_list, rechunk=True, parallel=False
+                stays_patient_candidates_list, rechunk=False, parallel=False
             )
 
             return result, patient_candidates, stays_patient_candidates

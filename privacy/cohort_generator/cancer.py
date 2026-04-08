@@ -12,7 +12,7 @@ from privacy.misc.data_wrangling import flatten_list, spark_filter_col_with_rege
 from privacy.misc.utils import get_spark
 from privacy.registry import registry
 
-spark, sql = get_spark()
+
 
 
 @registry.cohort_generator("Cancer")
@@ -263,8 +263,8 @@ class Cancer(BaseCohortGenerator):
             "condition_start_datetime",
         ],
     ):
-        sql(f"use {self.db}")
-        co = sql("SELECT *  FROM condition_occurrence")
+        self.sql(f"use {self.db}")
+        co = self.sql("SELECT *  FROM condition_occurrence")
 
         co = co.select(col_names)
 
@@ -290,8 +290,8 @@ class Cancer(BaseCohortGenerator):
             "procedure_datetime",
         ],
     ):
-        sql(f"use {self.db}")
-        po = sql("SELECT *  FROM procedure_occurrence")
+        self.sql(f"use {self.db}")
+        po = self.sql("SELECT *  FROM procedure_occurrence")
 
         po = po.select(col_names)
         return po
@@ -317,7 +317,7 @@ class Cancer(BaseCohortGenerator):
             cancer_icd10_code_dict.items(), columns=["cancer", "code"]
         )
         codes_cancer_pd = codes_cancer_pd.explode("code", ignore_index=True)
-        codes_cancer = spark.createDataFrame(codes_cancer_pd)
+        codes_cancer = self.spark.createDataFrame(codes_cancer_pd)
 
         ## We keep only lines related to cancer & add classification
         icd10_patients1 = co.join(
@@ -410,7 +410,7 @@ class Cancer(BaseCohortGenerator):
             ["treatment", "priority", source]
         ].explode(column=source)
         conditions_procedures.dropna(subset=[source], inplace=True)
-        conditions_procedures_spark = spark.createDataFrame(conditions_procedures)
+        conditions_procedures_spark = self.spark.createDataFrame(conditions_procedures)
         return conditions_procedures_spark
 
     def get_treatments(self, cohort):
@@ -462,6 +462,7 @@ class Cancer(BaseCohortGenerator):
         return treatments
 
     def __call__(self) -> Tuple[sparkDataFrame, sparkDataFrame]:
+        self.spark, self.sql = get_spark()
         cohort = self.get_cohort()
         cohort.cache()
         treatments = self.get_treatments(cohort)
@@ -495,5 +496,7 @@ class Cancer(BaseCohortGenerator):
         stays_treatments = stays_treatments.withColumn(
             "visit_number", F.row_number().over(window)
         )
+        del self.sql
+        del self.spark
 
         return stays_treatments, cohort

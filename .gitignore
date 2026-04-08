@@ -60,7 +60,13 @@ data/
 
 # Files
 .DS_Store
-
+figures/config_base/dendrogram_test.png
+figures/dev_clustering/
+figures/dev/
+notebooks/clustering R.md
 # Environment
 .venv
+.venv2
+.venv3
 logs/
+__poetry.lock

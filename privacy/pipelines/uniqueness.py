@@ -44,8 +44,9 @@ def pipe_uniqueness(
     )
     logger.debug(shifter.__class__.__name__)
     logger.debug(f"Attacker knowledge: {u.attack_knowledge}")
-
-    counts = result.to_pandas().unique.value_counts(normalize=True)
+    result = result.to_pandas()
+    counts = result.unique.value_counts(normalize=True)
+    remainder = result.remainder.value_counts(normalize=False).sort_index().to_dict()
     if True in counts.index:
         uniqueness = counts.loc[True]
     else:
@@ -60,6 +61,7 @@ def pipe_uniqueness(
             stays_pseudo=dataset,
             pseudonymization_process=pseudonymization_process,
             uniqueness=uniqueness,
+            remainder=remainder
         )
     else:
-        return uniqueness
+        return uniqueness, remainder

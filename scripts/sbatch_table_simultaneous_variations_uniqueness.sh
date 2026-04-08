@@ -11,7 +11,7 @@
 # source $HOME/.user_conda/miniconda/etc/profile.d/conda.sh
 
 ## your code here
-source $HOME/privacy/.venv/bin/activate 
+source $HOME/privacy/.venv2/bin/activate 
 
  
 python $HOME/privacy/scripts/table_simultaneous_variations_uniqueness.py --config $HOME/privacy/configs/config_base.cfg

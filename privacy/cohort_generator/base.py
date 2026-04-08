@@ -7,7 +7,7 @@ from pyspark.sql.dataframe import DataFrame as sparkDataFrame
 from privacy.misc.constants import mapping_code_hospital_short_name
 from privacy.misc.utils import get_spark
 
-spark, sql = get_spark()
+
 
 
 class BaseCohortGenerator:
@@ -26,7 +26,7 @@ class BaseCohortGenerator:
         self.age_min_at_stay = age_min_at_stay
 
     def retrieve_stays(self) -> sparkDataFrame:
-        vo = sql("SELECT * FROM visit_occurrence")
+        vo = self.sql("SELECT * FROM visit_occurrence")
         vo = vo.select(
             [
                 "person_id",
@@ -62,7 +62,7 @@ class BaseCohortGenerator:
         cohort = vo.select("person_id").drop_duplicates(subset=["person_id"])
 
         # Add person details
-        person = sql(
+        person = self.sql(
             "SELECT person_id, birth_datetime, death_datetime, gender_source_value from person"
         )
         person = person.withColumn("birth_date", F.to_date(F.col("birth_datetime")))
@@ -77,11 +77,11 @@ class BaseCohortGenerator:
 
     def add_hospital_info_to_stays(self, vo: sparkDataFrame) -> sparkDataFrame:
         # Add hospitals
-        cs = sql(
+        cs = self.sql(
             "SELECT care_site_id, care_site_source_value from care_site where care_site_type_source_value=='Hôpital'"
         )
 
-        mapping_code_hospital_short_name_spark = spark.createDataFrame(
+        mapping_code_hospital_short_name_spark = self.spark.createDataFrame(
             mapping_code_hospital_short_name
         )
         cs = cs.join(
@@ -98,7 +98,7 @@ class BaseCohortGenerator:
 
     def filter_by_age(self, vo: sparkDataFrame) -> sparkDataFrame:
         if self.age_min_at_stay is not None:
-            person = sql("SELECT person_id, birth_datetime from person")
+            person = self.sql("SELECT person_id, birth_datetime from person")
             person = person.withColumn("birth_date", F.to_date(F.col("birth_datetime")))
             person = person.drop("birth_datetime")
             vo = vo.join(person, on="person_id")
@@ -111,7 +111,7 @@ class BaseCohortGenerator:
         return vo
 
     def filter_opposed_patients(self, df: sparkDataFrame):
-        person = sql(
+        person = self.sql(
             "SELECT person_id from person WHERE status_source_value == 'Actif'"
         )
 
@@ -121,8 +121,9 @@ class BaseCohortGenerator:
     def __call__(
         self,
     ) -> Tuple[sparkDataFrame, sparkDataFrame]:
+        self.spark, self.sql = get_spark()
         # Set DB
-        sql(f"use {self.db}")
+        self.sql(f"use {self.db}")
 
         # Get stays
         vo = self.retrieve_stays()
@@ -141,5 +142,8 @@ class BaseCohortGenerator:
 
         # Filter opposed patients
         vo = self.filter_opposed_patients(vo)
+
+        del self.sql
+        del self.spark
 
         return vo, cohort
